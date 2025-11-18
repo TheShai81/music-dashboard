@@ -7,6 +7,19 @@ Relational database + mini-app built on top of Kaggle’s Spotify dataset.
 Users can create accounts, make friends, build playlists, and explore tracks, 
 artists, and genres without actually streaming audio.
 
+## PRELIMINARY PROJECT STEPS
+1. Create directory in your computer
+2. Run: git clone https://github.com/egrantcharov/spotify-dashboard.git
+3. Set up virtual machine (python3 -m venv venv   |   source venv/bin/activate)
+4. Run: pip install -r requirements.txt
+5. Run the Schema: mysql -u root -p < schema/schema.sql
+6. Create .env: cp .env.example .env
+7. Verify Database Setup: mysql -u spotify_user -p spotify_db
+8. In MySQL shell: SHOW TABLES;
+9. Data Loading (Lucas)
+10. Backend (Shailesh)
+11. GUI (Ryan)
+
 ## 1. Project Overview
 
 This project demonstrates:
