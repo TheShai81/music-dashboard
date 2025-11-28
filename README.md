@@ -21,7 +21,7 @@ artists, and genres without actually streaming audio.
    ```bash
    # Option A: MySQL CLI
    mysql -u root -p < schema/schema.sql
-   
+
    # Option B: Python script (if MySQL CLI unavailable)
    python setup_db.py
    ```
