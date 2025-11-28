@@ -1,2 +1,9 @@
 .env
 venv/
+
+# Large data files (download locally from Kaggle)
+data/SpotifyKaggle/
+*.csv
+
+# Generated processed files
+processed/
