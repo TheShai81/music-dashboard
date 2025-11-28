@@ -101,10 +101,12 @@ def load_tracks(cur, conn):
             liveness = float(row["liveness"]) if row["liveness"] else None
             valence = float(row["valence"]) if row["valence"] else None
             tempo_normalized = normalize_tempo(row["tempo"])
-            time_signature_normalized = normalize_time_signature(row["time_signature"])
 
             # Keep original key for key_signature column (0-11)
             key_signature = int(float(row["key"])) if row["key"] else None
+            # Keep original time_signature as integer (0-5) for TINYINT column
+            # Spotify API: number of beats per bar (0=unknown, 1-5=beats per measure)
+            time_signature = int(float(row["time_signature"])) if row["time_signature"] else None
 
             # Truncate title to fit VARCHAR(300) if needed
             title_truncated = title[:300] if len(title) > 300 else title
@@ -126,7 +128,7 @@ def load_tracks(cur, conn):
                 "liveness": liveness,
                 "valence": valence,
                 "tempo": tempo_normalized,
-                "time_signature": time_signature_normalized,
+                "time_signature": time_signature,
                 "popularity": popularity
             })
 

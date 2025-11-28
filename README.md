@@ -7,24 +7,27 @@ Relational database + mini-app built on top of Kaggle’s Spotify dataset.
 Users can create accounts, make friends, build playlists, and explore tracks,
 artists, and genres without actually streaming audio.
 
-## PRELIMINARY PROJECT STEPS
-1. Create directory in your computer
-2. Run: `git clone https://github.com/egrantcharov/spotify-dashboard.git`
-3. Set up virtual environment:
+## Quick Start
+
+1. **Clone repository**: `git clone https://github.com/egrantcharov/spotify-dashboard.git`
+2. **Set up Python environment**:
    ```bash
    python3 -m venv venv
    source venv/bin/activate  # On Windows: venv\Scripts\activate
+   pip install -r requirements.txt
    ```
-4. Install dependencies: `pip install -r requirements.txt`
-5. **Download data files locally** (see Data Setup section below)
-6. **Set up database schema** (choose one method):
-   - **Option A (MySQL CLI)**: `mysql -u root -p < schema/schema.sql`
-   - **Option B (Python script)**: `python setup_db.py` (if MySQL CLI not available)
-7. Create `.env` file: `cp .env.example .env` and update with your local MySQL credentials
-8. Verify Database Setup: Run `python test_connection.py` or connect via MySQL CLI
-9. Data Loading (see Data Loading section below)
-10. Backend (Shailesh)
-11. GUI (Ryan)
+3. **Download data files** (see Data Setup section) - place `artists.csv` and `tracks.csv` in `data/SpotifyKaggle/`
+4. **Set up database**:
+   ```bash
+   # Option A: MySQL CLI
+   mysql -u root -p < schema/schema.sql
+   
+   # Option B: Python script (if MySQL CLI unavailable)
+   python setup_db.py
+   ```
+5. **Configure database connection**: `cp .env.example .env` then edit `.env` with your MySQL credentials
+6. **Verify setup**: `python test_connection.py`
+7. **Load data** (see Data Loading section below)
 
 ## 1. Project Overview
 
@@ -109,36 +112,21 @@ The Spotify datasets are too large to include in git. Each team member must down
 
 ### Database Configuration
 
-Each team member should configure their local MySQL connection:
+1. Copy `.env.example` to `.env`: `cp .env.example .env`
+2. Edit `.env` with your MySQL credentials (use `root` or `spotify_user` depending on your setup)
+3. Scripts automatically use `.env` values, or fall back to defaults if `.env` doesn't exist
 
-1. **Copy the example environment file**:
-   ```bash
-   cp .env.example .env
-   ```
-
-2. **Edit `.env`** with your local MySQL credentials:
-   ```bash
-   DB_HOST=localhost
-   DB_USER=spotify_user          # or your MySQL username
-   DB_PASSWORD=Spotify123!      # or your MySQL password
-   DB_NAME=spotify_db            # or your database name
-   ```
-
-3. **The scripts will automatically use these values** from the `.env` file. If `.env` doesn't exist, they'll fall back to defaults (which match the schema.sql setup).
-
-**Important**: The `.env` file is gitignored and won't be committed, so each person can have their own local configuration.
+**Note**: `.env` is gitignored - each team member uses their own local credentials.
 
 ## 5. Data Loading Instructions
 
 ### Prerequisites
-- MySQL database must be set up and running
-- Schema must be created (see Preliminary Project Steps #6)
-- Virtual environment activated (`source venv/bin/activate`)
-- Python dependencies installed (`pip install -r requirements.txt`)
-- **Data files downloaded** and placed in `data/SpotifyKaggle/` directory (see Data Setup section)
-- `.env` file created with your local MySQL credentials (see Data Setup section)
+- Database schema created (see Quick Start #4)
+- Virtual environment activated
+- Data files in `data/SpotifyKaggle/` (artists.csv, tracks.csv)
+- `.env` file configured
 
-**Important**: Make sure you're in the virtual environment and in the `generate_load_data/` directory when running the scripts.
+**Run all scripts from `generate_load_data/` directory.**
 
 ### Loading Steps
 
@@ -147,56 +135,25 @@ Each team member should configure their local MySQL connection:
 cd generate_load_data
 python load_artists.py
 ```
-This script:
-- Reads `data/SpotifyKaggle/artists.csv`
-- Inserts artists into the `Artists` table
-- Extracts and normalizes genres into `Genres` table
-- Creates `ArtistGenres` junction table entries
-- Expected runtime: ~5-10 minutes for ~1.1M artists
+Loads ~1.1M artists, ~5.4K genres, and relationships. Runtime: ~5-10 minutes.
 
 **Step 2: Load Tracks**
 ```bash
 python load_tracks.py
 ```
-This script:
-- Reads `data/SpotifyKaggle/tracks.csv`
-- Normalizes musical attributes to [0,1] range:
-  - `loudness`: normalized from dB range (-60 to 0)
-  - `tempo`: normalized from BPM range (60-200)
-  - `time_signature`: normalized from range (3-7)
-  - `key`: normalized from 0-11 to [0,1]
-- Inserts tracks into `Tracks` table
-- Creates `TrackArtists` junction table entries
-- Expected runtime: ~10-15 minutes for ~586K tracks
+Loads ~586K tracks with normalized musical attributes. Runtime: ~10-15 minutes.
 
 **Step 3: Generate Fake User Data**
 ```bash
 python generate_fake_users.py [num_users]
 ```
-This script:
-- Generates synthetic users, preferences, subscriptions, comments, and likes
-- Default: 1000 users (specify custom number as argument)
-- Writes CSV files to `processed/` directory:
-  - `users.csv` (includes subscription_id, subscription_start_date, subscription_end_date)
-  - `preferences.csv`
-  - `subscriptions.csv`
-  - `comments.csv`
-  - `track_likes.csv`
-- Expected runtime: ~1-2 minutes for 1000 users
+Generates synthetic users, preferences, subscriptions, comments, and likes. Default: 1000 users. Creates CSV files in `processed/` directory. Runtime: ~1-2 minutes.
 
 **Step 4: Load Fake User Data**
 ```bash
 python load_fake_users.py
 ```
-This script:
-- Reads CSV files from `processed/` directory
-- Inserts data in correct order to respect foreign key constraints:
-  1. Subscriptions
-  2. Users (includes subscription information)
-  3. Preferences
-  4. Comments
-  5. TrackLikes
-- Expected runtime: ~2-5 minutes for 1000 users
+Loads user data from `processed/` directory in correct order (respects foreign keys). Runtime: ~2-5 minutes.
 
 ### Complete Loading Sequence
 ```bash
@@ -207,60 +164,31 @@ python generate_fake_users.py 1000
 python load_fake_users.py
 ```
 
-### Verifying Data Load
-After loading, verify the data. You can use either method:
-
-**Option A: Python script**
+### Verify Data Load
 ```bash
-python test_connection.py
+python test_connection.py  # Shows table counts
 ```
 
-**Option B: MySQL CLI**
-```bash
-mysql -u root -p spotify_db  # or your credentials
-
--- Check counts
-SELECT COUNT(*) FROM Artists;      -- Should be ~1,104,349
-SELECT COUNT(*) FROM Genres;        -- Should be ~5,365
-SELECT COUNT(*) FROM ArtistGenres; -- Should be ~460,843
-SELECT COUNT(*) FROM Tracks;        -- Should be ~586,672
-SELECT COUNT(*) FROM TrackArtists; -- Should be ~730,141
-SELECT COUNT(*) FROM Users;        -- Depends on num_users you generated
-SELECT COUNT(*) FROM TrackLikes;   -- Depends on num_users
-SELECT COUNT(*) FROM Comments;     -- Depends on num_users
-```
-
-**Expected Results:**
+**Expected counts:**
 - Artists: ~1,104,349
-- Genres: ~5,365 (unique genres)
-- ArtistGenres: ~460,843 (artist-genre relationships)
+- Genres: ~5,365
+- ArtistGenres: ~460,843
 - Tracks: ~586,672
-- TrackArtists: ~730,141 (track-artist relationships)
+- TrackArtists: ~730,141
+- Users/Comments/Likes: Depends on `num_users` you generated
 
-## 6. Troubleshooting
+## Troubleshooting
 
-### Common Issues
+| Issue | Solution |
+|-------|----------|
+| "Unknown database 'spotify_db'" | Run schema setup (Quick Start #4) |
+| "ModuleNotFoundError: No module named 'mysql'" | Activate venv and run `pip install -r requirements.txt` |
+| MySQL CLI not found | Use `python setup_db.py` instead |
+| Tracks loading stops | Clear and reload: `TRUNCATE TABLE Tracks; TRUNCATE TABLE TrackArtists;` then rerun `load_tracks.py` |
 
-**Issue: "Unknown database 'spotify_db'"**
-- Solution: Make sure you've run the schema setup (Step 6 in Preliminary Project Steps)
+## Notes
 
-**Issue: "ModuleNotFoundError: No module named 'mysql'"**
-- Solution: Make sure virtual environment is activated and dependencies are installed
-
-**Issue: "Data too long for column"**
-- Solution: The scripts automatically truncate long names/titles. If you see this error, it means the script needs an update.
-
-**Issue: Tracks loading stops before completion**
-- Solution: Clear tracks and reload: `TRUNCATE TABLE Tracks; TRUNCATE TABLE TrackArtists;` then rerun `load_tracks.py`
-
-**Issue: MySQL CLI not found**
-- Solution: Use the Python alternative: `python setup_db.py` instead of `mysql -u root -p < schema/schema.sql`
-
-## 7. Notes
-
-- **Data Normalization**: Musical attributes are normalized to [0,1] range for similarity calculations
-- **Foreign Key Constraints**: Load scripts handle missing references gracefully (skip invalid entries)
-- **Batch Processing**: Large datasets are processed in batches to manage memory
-- **Duplicate Handling**: Scripts skip duplicate entries automatically
-- **Error Handling**: Scripts include error handling and rollback on failures
-- **Genre Counts**: The `Genres` table contains unique genre names (~5,365). The `ArtistGenres` table contains the many-to-many relationships (~460,843), which is why that number is much higher.
+- **Data Normalization**: Musical attributes (loudness, tempo, key) normalized to [0,1] range
+- **Time Signature**: Stored as integer 0-5 (number of beats per bar, 0=unknown)
+- **Error Handling**: Scripts handle duplicates and missing references gracefully
+- **Batch Processing**: Large datasets processed in batches for memory efficiency
