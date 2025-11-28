@@ -12,6 +12,17 @@ FLUSH PRIVILEGES;
 USE spotify_db;
 
 -- =====================
+-- Subscriptions
+-- =====================
+
+CREATE TABLE Subscriptions (
+    sub_id        INT AUTO_INCREMENT PRIMARY KEY,
+    name          VARCHAR(50) NOT NULL UNIQUE,
+    cost          DECIMAL(6,2) NOT NULL,
+    max_playlists INT NOT NULL
+);
+
+-- =====================
 -- Core user-related
 -- =====================
 
@@ -20,7 +31,13 @@ CREATE TABLE Users (
     username       VARCHAR(50) NOT NULL UNIQUE,
     email          VARCHAR(100) NOT NULL UNIQUE,
     password_hash  VARCHAR(255) NOT NULL,
-    created_at     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+    created_at     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    subscription_id INT,
+    subscription_start_date DATE,
+    subscription_end_date DATE,
+    CONSTRAINT fk_user_subscription FOREIGN KEY (subscription_id)
+        REFERENCES Subscriptions(sub_id)
+        ON DELETE SET NULL
 );
 
 CREATE TABLE Friendships (
@@ -45,31 +62,6 @@ CREATE TABLE Preferences (
     CONSTRAINT fk_prefs_user FOREIGN KEY (user_id)
         REFERENCES Users(user_id)
         ON DELETE CASCADE
-);
-
--- =====================
--- Subscriptions
--- =====================
-
-CREATE TABLE Subscriptions (
-    sub_id        INT AUTO_INCREMENT PRIMARY KEY,
-    name          VARCHAR(50) NOT NULL UNIQUE,
-    cost          DECIMAL(6,2) NOT NULL,
-    max_playlists INT NOT NULL
-);
-
-CREATE TABLE SubscribesTo (
-    user_id        INT NOT NULL,
-    subscription_id INT NOT NULL,
-    start_date     DATE NOT NULL,
-    end_date       DATE,
-    PRIMARY KEY (user_id, subscription_id, start_date),
-    CONSTRAINT fk_subscribes_user FOREIGN KEY (user_id)
-        REFERENCES Users(user_id)
-        ON DELETE CASCADE,
-    CONSTRAINT fk_subscribes_sub FOREIGN KEY (subscription_id)
-        REFERENCES Subscriptions(sub_id)
-        ON DELETE RESTRICT
 );
 
 -- =====================
