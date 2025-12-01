@@ -1,11 +1,13 @@
 from flask import Flask
 from dotenv import load_dotenv
+from pathlib import Path
 import os
 import mysql.connector
 from mysql.connector import Error
 
 # load database connection keys/info
-load_dotenv()
+dotenv_path = Path(__file__).resolve().parent.parent / ".env"
+load_dotenv(dotenv_path)
 
 def create_app():
     app = Flask(__name__)
