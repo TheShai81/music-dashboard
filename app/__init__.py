@@ -27,7 +27,6 @@ def create_app():
             password=app.config['DB_PASSWORD'],
             database=app.config['DB_NAME']
         )
-        app.cursor = app.db.cursor(dictionary=True)
         print("Connected to MySQL database successfully.")
     except Error as e:
         print(f"Error connecting to MySQL: {e}")
