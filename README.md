@@ -190,5 +190,3 @@ python test_connection.py  # Shows table counts
 
 - **Data Normalization**: Musical attributes (loudness, tempo, key) normalized to [0,1] range
 - **Time Signature**: Stored as integer 0-5 (number of beats per bar, 0=unknown)
-- **Error Handling**: Scripts handle duplicates and missing references gracefully
-- **Batch Processing**: Large datasets processed in batches for memory efficiency
