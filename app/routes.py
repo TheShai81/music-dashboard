@@ -109,12 +109,12 @@ def home():
     friends = []
     
     # find liked songs
-    query = "SELECT t.* FROM Tracks t JOIN TrackLikes tl ON t.track_id = tl.track_id WHERE tl.user_id = %s"
+    query = "SELECT t.track_id, t.title, t.duration_ms, t.release_date FROM Tracks t JOIN TrackLikes tl ON t.track_id = tl.track_id WHERE tl.user_id = %s"
     cursor = current_app.db.cursor(dictionary=True)
     cursor.execute(query, (user_id))
     liked_songs = cursor.fetchall()
     # find friends
-    query = "SELECT u.* FROM Users u " \
+    query = "SELECT u.user_id, u.username, f.date_befriended FROM Users u " \
             "JOIN Friendships f ON" \
             "(u.user_id = f.user_id1 AND f.user_id2 = %s) OR (u.user_id = f.user_id2 AND f.user_id1 = %s)"
     cursor.execute(query, (user_id))
@@ -467,7 +467,7 @@ def artist_page_data(artist_id: int):
         FROM Tracks t
         JOIN TrackArtists ta ON t.track_id = ta.track_id
         WHERE ta.artist_id = %s
-        ORDER BY t.popularity DESC;
+        ORDER BY t.popularity DESC
         LIMIT 100;
     """
 
