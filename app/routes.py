@@ -150,20 +150,22 @@ def search():
     However, track and artist are submitted simultaneously even if one or the other is empty.
     
     Sends the following data to frontend:
-    results = {
-        'users': [
+
+        users = [
             {
                 'user_id': int,
                 'username': str,
                 'friend': bool 1/0
             }
-        ],
-        'artists': [
+        ]
+
+        artists = [
             'artist_id': int, 
             'name': str, 
             'popularity': int]
         ]
-        'tracks': [
+
+        tracks = [
             {
                 'track_id': int, 
                 'title': str, 
@@ -171,58 +173,106 @@ def search():
                 'duration': int (seconds)
             }
         ]
-    }
     '''
-    results = {'users': [], 'tracks': [], 'artists': []}
+
+    users = []
+    tracks = []
+    artists = []
+
     if request.method == 'POST':
         user_keyword = request.form['user_keyword']
         track_keyword = request.form['track_keyword']
         artist_keyword = request.form['artist_keyword']
         results = {}
         if user_keyword and user_keyword != "":
-            results['users'] = search_users(user_keyword)
-            results['tracks'] = []
-            results['artists'] = []
+            users = search_users(user_keyword)
+            tracks = []
+            artists = []
         elif track_keyword and track_keyword != "":
-            results['tracks'] = search_tracks(track_keyword, artist_keyword if artist_keyword else "")
-            results['users'] = []
+            tracks = search_tracks(track_keyword, artist_keyword if artist_keyword else "")
+            users = []
             if artist_keyword and artist_keyword != "":
-                results['artists'] = search_artists(artist_keyword)
+                artists = search_artists(artist_keyword)
             else:
-                results['artists'] = []
+                artists = []
         elif artist_keyword and artist_keyword != "":
-            results['artists'] = search_artists(artist_keyword)
-            results['tracks'] = []
-            results['users'] = []
+            artists = search_artists(artist_keyword)
+            tracks = []
+            users = []
 
-    return render_template('search.html', results=results)
+    return render_template('search.html',
+                           users=users,
+                           tracks=tracks,
+                           artists=artists)
 
 
 @bp.route('/artist/<artist_id>')
 def artist_page(artist_id):
     '''
     An artist page. Only expects `artist_id` attribute to render template.
-    '''
-    # TODO: implement function fetch artist info, their tracks, genres, likes
-    artist_info = {}
-    tracks = []
-    genres = []
 
-    return render_template('artist.html', artist=artist_info, tracks=tracks, genres=genres)
+    Information sent to frontend:
+
+        artist = {
+            name: str,
+            popularity: int
+        }
+
+        tracks = [
+            {
+                track_id: int,
+                title: str,
+                duration: int (in seconds),
+                explicit: bool
+            }
+        ]
+    '''
+
+    page_data = artist_page_data(artist_id)
+
+    return render_template('artist.html',
+                           artist=page_data["artist_info"],
+                           tracks=page_data["tracks"])
 
 
 @bp.route('/user/<int:user_id>')
 def user_page(user_id):
     '''
     A user page. Only expects `user_id` to render template.
+
+    Information sent to frontend:
+
+        user = {
+            username: str,
+            pfp_color: str
+        }
+
+        liked_tracks = [
+            {
+                track_id: int,
+                title: str,
+                duration: int (in seconds),
+                artists: List[str],
+            }
+        ]
+
+        friends = [
+            {
+                friend_id: int,
+                friend_name: str
+            }
+        ]
     '''
-    # TODO: implement function to etch user info, liked tracks, top genres, friends
+    # TODO: implement function to etch user info, liked tracks, and friends
+    page_data = user_page_data(user_id)
     user_info = {}
     liked_tracks = []
-    top_genres = []
     friends = []
 
-    return render_template('user.html', user=user_info, liked_tracks=liked_tracks, top_genres=top_genres, friends=friends)
+    return render_template('user.html',
+                           user=page_data["user_info"],
+                           liked_tracks=page_data["liked_tracks"],
+                           friends=page_data["friends"])
 
 
 @bp.route('/track/<track_id>', methods=['GET', 'POST'])
@@ -233,16 +283,36 @@ def track_page(track_id):
     Information expected from POST (for commenting and liking the track only):
         - comment (str): the comment a user left. Empty string if no comment and this POST is about a like.
         - liked (bool): if a user liked the track. False if this POST is about a comment.
+    
+    Information sent to frontend:
+
+        track = {
+            title: str,
+            release_date: str,
+            duration: int (secs),
+            explicit: boolean,
+            key_signature: int,
+            popularity: int
+        }
+        
+        comments = [
+            {
+                username: str,
+                content: str,
+                created_at: str
+            }
+        ]
     '''
     if request.method == 'POST':
         # TODO: Add comment or like
         pass
 
     # TODO: implement function to fetch track info and comments
-    track_info = {}
-    comments = []
+    page_data = track_page_data(track_id)
 
-    return render_template('track.html', track=track_info, comments=comments)
+    return render_template('track.html',
+                           track=page_data["track_info"],
+                           comments=page_data["comments"])
 
 ########################################################
 # TODO: Implement helper functions for complex queries #
@@ -288,7 +358,6 @@ def search_users(keyword: str):
 
     return result
 
-
 def search_tracks(track_keyword: str, artist_keyword: str):
     '''
     Searches for tracks with `track_keyword` and, if not empty, searches for tracks whose artist is `artist_keyword`.
@@ -321,7 +390,7 @@ def search_tracks(track_keyword: str, artist_keyword: str):
         base_query += " AND a.name LIKE %s"
         params.append(f"%{artist_keyword}%")
 
-    base_query += " LIMIT 10"
+    base_query += "ORDER BY t.popularity LIMIT 10"
 
     cursor.execute(base_query, tuple(params))
     result = cursor.fetchall()
@@ -361,3 +430,188 @@ def search_artists(keyword: str):
     cursor.close()
 
     return result
+
+def artist_page_data(artist_id: int):
+    '''
+    Returns all the data needed to construct an artist page in the frontend.
+    Only returns the 100 most popular songs of the artist.
+    
+    :param artist_id: the id of the artist for whom to make a page
+    :type artist_id: int
+
+    :returns data: dict[name: str, tracks: List[dict[track_id, title, duration (secs), explicit]], \
+        popularity: int]
+    '''
+
+    cursor = current_app.db.cursor(dictionary=True)
+
+    artist_query = """
+        SELECT name, popularity
+        FROM Artists
+        WHERE artist_id = %s;
+    """
+    cursor.execute(artist_query, (artist_id,))
+    artist = cursor.fetchone()
+
+    if not artist:
+        cursor.close()
+        return None
+
+    # Get tracks by this artist
+    tracks_query = """
+        SELECT 
+            t.track_id,
+            t.title,
+            t.duration_ms,
+            t.explicit
+        FROM Tracks t
+        JOIN TrackArtists ta ON t.track_id = ta.track_id
+        WHERE ta.artist_id = %s
+        ORDER BY t.popularity DESC;
+        LIMIT 100;
+    """
+
+    cursor.execute(tracks_query, (artist_id,))
+    tracks = cursor.fetchall()
+
+    for track in tracks:
+        track["duration"] = track.pop("duration_ms") // 1000
+
+    cursor.close()
+
+    return {
+        "artist_info": artist,
+        "tracks": tracks
+    }
+
+def user_page_data(user_id: int):
+    '''
+    Returns all data needed to contrsuct a user's page (a general user not the current user).
+    
+    :param user_id: the id of the user for whom to make a page
+    :type user_id: int
+
+    :returns data: dict[username: str, pfp_color: str, liked_tracks: List[dict[track_id, title, duration (secs), \
+        artists: List[name: str]]], friends: List[dict[friend_id, friend_name]]]
+    '''
+
+    cursor = current_app.db.cursor(dictionary=True)
+
+    # base user info
+    user_query = """
+        SELECT username, pfp_color
+        FROM Users
+        WHERE user_id = %s;
+    """
+    cursor.execute(user_query, (user_id,))
+    user = cursor.fetchone()
+
+    if not user:
+        cursor.close()
+        return None
+
+
+    # get liked tracks
+    liked_tracks_query = """
+        SELECT
+            t.track_id,
+            t.title,
+            t.duration_ms
+        FROM TrackLikes tl
+        JOIN Tracks t ON tl.track_id = t.track_id
+        WHERE tl.user_id = %s;
+    """
+
+    cursor.execute(liked_tracks_query, (user_id,))
+    liked_tracks = cursor.fetchall()
+
+    # for each liked track, get all of its artists
+    for track in liked_tracks:
+        artist_query = """
+            SELECT a.name
+            FROM Artists a
+            JOIN TrackArtists ta ON a.artist_id = ta.artist_id
+            WHERE ta.track_id = %s;
+        """
+        cursor.execute(artist_query, (track["track_id"],))
+        artists = cursor.fetchall()
+
+        track["artists"] = [artist["name"] for artist in artists]
+
+        track["duration"] = track.pop("duration_ms") // 1000
+
+    friends_query = """
+        SELECT 
+            u.user_id AS friend_id,
+            u.username AS friend_name
+        FROM Friendships f
+        JOIN Users u ON f.friend_id = u.user_id
+        WHERE f.user_id = %s;
+    """
+    cursor.execute(friends_query, (user_id,))
+    friends = cursor.fetchall()
+
+    cursor.close()
+
+    return {
+        "user_info": user,
+        "liked_tracks": liked_tracks,
+        "friends": friends
+    }
+
+def track_page_data(track_id: int):
+    '''
+    Returns all data needed to construct a track page (just comments and general track info really).
+    
+    :param track_id: the id of the track for which to make a page
+    :type track_id: int
+
+    :returns data: dict[title, release_date, duration (secs), explicit, key_signature, popularity, \
+        comments: List[dict[username, content, created_at]]]
+    '''
+
+    cursor = current_app.db.cursor(dictionary=True)
+
+    # Get base track info
+    track_query = """
+        SELECT
+            title,
+            release_date,
+            duration_ms,
+            explicit,
+            key_signature,
+            popularity
+        FROM Tracks
+        WHERE track_id = %s;
+    """
+    cursor.execute(track_query, (track_id,))
+    track = cursor.fetchone()
+
+    if not track:
+        cursor.close()
+        return None
+
+    track["duration"] = track.pop("duration_ms") // 1000
+
+
+    # Get comments
+    comments_query = """
+        SELECT
+            u.username,
+            c.content,
+            c.created_at
+        FROM Comments c
+        JOIN Users u ON c.user_id = u.user_id
+        WHERE c.track_id = %s
+        ORDER BY c.created_at DESC;
+    """
+
+    cursor.execute(comments_query, (track_id,))
+    comments = cursor.fetchall()
+
+    cursor.close()
+
+    return {
+        "track_info": track,
+        "comments": comments
+    }
