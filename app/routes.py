@@ -1,6 +1,8 @@
 from flask import Blueprint, render_template, request, redirect, url_for, session, jsonify, current_app
 from werkzeug.security import generate_password_hash, check_password_hash
 
+from datetime import date
+
 bp = Blueprint('main', __name__, template_folder="templates")
 
 @bp.route('/register', methods=['GET', 'POST'])
@@ -31,13 +33,14 @@ def register():
         try:
             cursor = current_app.db.cursor(dictionary=True)
             # user info insertion
-            query = "INSERT INTO Users (username, email, password_hash) VALUES (%s, %s, %s)"
-            cursor.execute(query, (username, email, hashed_pw))
+            created_at = date.today().strftime("%Y-%m-%d")
+            query = "INSERT INTO Users (username, email, password_hash, created_at) VALUES (%s, %s, %s, %s)"
+            cursor.execute(query, (username, email, hashed_pw, created_at))
             current_app.db.commit()
             
             # preferences insertion
             user_id = cursor.lastrowid
-            query_pref = "INSERT INTO Preferences (user_id) VALUES (%s, %s, %s)"
+            query_pref = "INSERT INTO Preferences (user_id, theme, pfp_color) VALUES (%s, %s, %s)"
             cursor.execute(query_pref, (user_id, theme, pfp_color))
             current_app.db.commit()
             cursor.close()
