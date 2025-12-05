@@ -2,6 +2,8 @@ from flask import Blueprint, render_template, request, redirect, url_for, sessio
 from werkzeug.security import generate_password_hash, check_password_hash
 
 from datetime import date
+import numpy as np
+from numpy.linalg import norm
 
 bp = Blueprint('main', __name__, template_folder="templates")
 
@@ -142,9 +144,11 @@ def home():
             case "discovery":
                 pass
             case "soulmate":
-                pass
+                query_results = find_soulmate()
             case "compatibility":
-                pass
+                # expects the id of the friend to calculate compatibility with to be passed in POST
+                friend = request.form['friend_id']
+                query_results = get_compatibility(friend)
             case "recommend_friend":
                 pass
             case "dashboard":
@@ -777,3 +781,122 @@ def calculate_music_age():
         return 0  # no liked songs
 
     return int(round(row["avg_age"]))
+
+def get_taste_profile(user_id: int) -> np.array:
+    '''
+    Returns the user's "taste profile", computed as the average of the following
+    attributes over all tracks they have liked:
+    [mode, danceability, energy, loudness, speechiness, acousticness,
+     instrumentalness, liveness, valence, tempo]
+
+    :returns: a vector of the average value of characteristic track attributes.
+    :rtype: np.array
+    '''
+
+    cursor = current_app.db.cursor(dictionary=True)
+
+    query = """
+        SELECT
+            AVG(t.mode)                AS mode,
+            AVG(t.danceability)        AS danceability,
+            AVG(t.energy)              AS energy,
+            AVG(t.loudness)            AS loudness,
+            AVG(t.speechiness)         AS speechiness,
+            AVG(t.acousticness)        AS acousticness,
+            AVG(t.instrumentalness)    AS instrumentalness,
+            AVG(t.liveness)            AS liveness,
+            AVG(t.valence)             AS valence,
+            AVG(t.tempo)               AS tempo,
+        FROM TrackLikes tl
+        JOIN Tracks t ON tl.track_id = t.track_id
+        WHERE tl.user_id = %s;
+    """
+
+    cursor.execute(query, (user_id,))
+    row = cursor.fetchone()
+    cursor.close()
+
+    if not row or all(v is None for v in row.values()):
+        # no liked tracks
+        return np.zeros(11)
+
+    # final vector
+    taste_vector = np.array([
+        row["mode"],
+        row["danceability"],
+        row["energy"],
+        row["loudness"],
+        row["speechiness"],
+        row["acousticness"],
+        row["instrumentalness"],
+        row["liveness"],
+        row["valence"],
+        row["tempo"]
+    ], dtype=float)
+
+    return taste_vector
+
+def cos_sim(x1: np.array, x2: np.array) -> float:
+    '''
+    Computes the cosine similarity of x1 and x2. 0 = no similarity, 1 = same norm. 
+    It will always fall between 0 and 1 here because the features in Tracks are all non-negative.
+    '''
+    return np.dot(x1, x2) / (norm(x1) * norm(x2))
+
+def get_compatibility(friend_id: int) -> float:
+    '''
+    Docstring for get_compatibility
+    
+    :param friend_id: The id of the friend with whom to test your compatibility
+    :type friend_id: int
+    :return: the "percent" compatibile. .45 corresponds to 45% compatible.
+    :rtype: float
+    '''
+    user_id = session["user_id"]
+    user_profile = get_taste_profile(user_id)
+    friend_profile = get_taste_profile(friend_id)
+    sim = cos_sim(user_profile, friend_profile)
+
+    return sim
+
+def find_soulmate():
+    '''
+    Computes compatibility with all friends and just returns the friend with the highest.
+
+    :returns results: dict[friend_id: int, username: str]
+    '''
+    
+    user_id = session["user_id"]
+    cursor = current_app.db.cursor(dictionary=True)
+
+    # get all friends
+    query = """
+        SELECT 
+            u.user_id AS friend_id,
+            u.username
+        FROM Friendships f
+        JOIN Users u ON (
+            (f.user_id_1 = %s AND f.user_id_2 = u.user_id)
+            OR
+            (f.user_id_2 = %s AND f.user_id_1 = u.user_id)
+        )
+    """
+    cursor.execute(query, (user_id, user_id))
+    friends = cursor.fetchall()
+
+    if not friends:
+        return {}  # has no friends
+
+    # find most compatible friend
+    best_friend = None
+    best_score = -1
+
+    for friend in friends:
+        friend_id = friend["friend_id"]
+        score = get_compatibility(friend_id)
+
+        if score > best_score:
+            best_score = score
+            best_friend = friend
+
+    return best_friend if best_friend else {}
