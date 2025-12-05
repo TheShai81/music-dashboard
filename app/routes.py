@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, request, redirect, url_for, session, jsonify, current_app
+from flask import Blueprint, render_template, request, redirect, url_for, session, jsonify, current_app, abort
 from werkzeug.security import generate_password_hash, check_password_hash
 
 from datetime import date
@@ -100,9 +100,16 @@ def home():
                 - Requires `friend_id` attr. The friend with whom to calculate compatibility
             - genres: top 3 most liked to genres
             - artists: top 3 most liked artists
+            - obscurity: how obscure is their music taste
+            - music_age: how "old" is their music
             - discovery: generate a discovery playlist for the user
             - recommend_friend: recommend a friend of a friend based on similarity
                 - Requires `friend_id` attr. The friend of whom to find a friend
+
+    For full information on whateach of the above possible desired queries sends to the frontend, read each query's
+    function's docstring for clear return value descriptions with field names and data types.
+
+    Information returned to frontend under the accessible variable name `query_results`.
     '''
     if 'user_id' not in session:
         return redirect(url_for('main.login'))
@@ -124,7 +131,30 @@ def home():
     friends = cursor.fetchall()
     cursor.close()
 
-    # TODO: implement queries like friend compatibility or discovery playlist or insights dashboard
+    query_results = []
+    if request.method == 'POST':
+        desired_query = request.form['desired_query']
+        match desired_query:
+            case "artists":
+                query_results = top_3_artists()
+            case "genres":
+                query_results = top_3_genres()
+            case "discovery":
+                pass
+            case "soulmate":
+                pass
+            case "compatibility":
+                pass
+            case "recommend_friend":
+                pass
+            case "dashboard":
+                pass
+            case "obscurity":
+                query_results = calculate_obscurity()
+            case "music_age":
+                query_results = calculate_music_age()
+            case _:
+                abort(404)
 
     dashboard_data = {
         'liked_songs': [], 
@@ -134,7 +164,8 @@ def home():
 
     return render_template('home.html',
                            liked_songs=liked_songs,
-                           friends=friends)
+                           friends=friends,
+                           query_results=query_results)
 
 
 @bp.route('/search', methods=['GET', 'POST'])
@@ -618,3 +649,131 @@ def track_page_data(track_id: int):
         "track_info": track,
         "comments": comments
     }
+
+def top_3_artists():
+    '''
+    Extracts the three artists the user has liked the most.
+
+    :returns results: [
+        {
+            artist_id: int,
+            name: str,
+            like_count: int
+        }
+    ] \
+    or List[dict[artist_id: int, name: str, like_count: int]]
+
+    '''
+
+    user_id = session['user_id']
+    cursor = current_app.db.cursor(dictionary=True)
+
+    query = """
+        SELECT 
+            a.artist_id,
+            a.name,
+            COUNT(tl.track_id) AS like_count
+        FROM TrackLikes tl
+        JOIN TrackArtists ta ON tl.track_id = ta.track_id
+        JOIN Artists a ON ta.artist_id = a.artist_id
+        WHERE tl.user_id = %s
+        GROUP BY a.artist_id, a.name
+        ORDER BY like_count DESC
+        LIMIT 3;
+    """
+
+    cursor.execute(query, (user_id,))
+    results = cursor.fetchall()
+
+    return results
+
+def top_3_genres():
+    '''
+    Finds the top 3 most liked genres of the user.
+
+    :returns results: List[dict[genre_name: str, liked_count: int]] or \
+    [
+        {
+            genre_name: str,
+            liked_count: int
+        }
+    ]
+    '''
+
+    user_id = session["user_id"]
+    cursor = current_app.db.cursor(dictionary=True)
+
+    query = """
+    SELECT 
+        g.genre_name,
+        COUNT(tl.track_id) AS liked_count
+    FROM TrackLikes tl
+    JOIN Tracks t ON tl.track_id = t.track_id
+    JOIN ArtistGenres ag ON ag.artist_id = (
+        SELECT ta.artist_id
+        FROM TrackArtists ta
+        WHERE ta.track_id = t.track_id
+        LIMIT 1
+    )
+    JOIN Genres g ON ag.genre_id = g.genre_id
+    WHERE tl.user_id = %s
+    GROUP BY g.genre_id, g.genre_name
+    ORDER BY liked_count DESC
+    LIMIT 3;
+    """
+
+    cursor.execute(query, (user_id,))
+    return cursor.fetchall()
+
+def calculate_obscurity():
+    '''
+    Calculates the obscurity of a user's liked tracks. Finds the average popularity of liked tracks, \
+        then subtracts that from 100. round(100 - avg(popularity), 2).
+    
+    :returns result: Float from 0 to 100. A return value of `x` is represented as `x%` obscure.
+    '''
+
+    user_id = session["user_id"]
+    cursor = current_app.db.cursor(dictionary=True)
+
+    query = """
+        SELECT AVG(t.popularity) AS avg_popularity
+        FROM TrackLikes tl
+        JOIN Tracks t ON tl.track_id = t.track_id
+        WHERE tl.user_id = %s;
+    """
+
+    cursor.execute(query, (user_id,))
+    row = cursor.fetchone()
+
+    if not row or row["avg_popularity"] is None:
+        return 0.0  # no liked tracks
+
+    obscurity = round(100 - float(row["avg_popularity"]), 2)
+    return obscurity
+
+def calculate_music_age():
+    '''
+    Calculates the average age of the user's liked songs.
+
+    :returns result: integer value that is the users music age in years.
+    '''
+
+    user_id = session["user_id"]
+    cursor = current_app.db.cursor(dictionary=True)
+
+    query = """
+        SELECT AVG(YEAR(CURDATE()) - YEAR(t.release_date)) AS avg_age
+        FROM TrackLikes tl
+        JOIN Tracks t ON tl.track_id = t.track_id
+        WHERE tl.user_id = 1
+        AND t.release_date IS NOT NULL;
+    """
+
+    cursor.execute(query, (user_id,))
+    row = cursor.fetchone()
+
+    if not row or row["avg_age"] is None:
+        return 0  # no liked songs
+
+    return int(round(row["avg_age"]))
