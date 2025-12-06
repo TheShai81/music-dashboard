@@ -4,6 +4,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import date
 import numpy as np
 from numpy.linalg import norm
+import random
 
 bp = Blueprint('main', __name__, template_folder="templates")
 
@@ -320,7 +321,9 @@ def track_page(track_id):
 
     Information expected from POST (for commenting and liking the track only):
         - comment (str): the comment a user left. Empty string if no comment and this POST is about a like.
-        - liked (bool): if a user liked the track. False if this POST is about a comment.
+        - liked (bool): if a user liked the track. False if this POST is about a comment. Also True if a user \
+        *unliked* a track so that we can toggle this.
+        - similar_tracks (bool): True if a user requested to see 10 similar tracks to this one. False otherwise.
     
     Information sent to frontend:
 
@@ -330,7 +333,8 @@ def track_page(track_id):
             duration: int (secs),
             explicit: boolean,
             key_signature: int,
-            popularity: int
+            popularity: int,
+            liked: bool (whether user has liked the track)
         }
         
         comments = [
@@ -340,17 +344,76 @@ def track_page(track_id):
                 created_at: str
             }
         ]
-    '''
-    if request.method == 'POST':
-        # TODO: Add comment or like
-        pass
 
-    # TODO: implement function to fetch track info and comments
+        (if requested)
+        similar_tracks = [
+            {
+                track_id: int,
+                title: str
+            }
+        ]
+    '''
+    
+    # variable in case the user has requested 10 songs similar to the current one
+    top_10 = []
+
+    user_id = session["user_id"]
+
+    if request.method == 'POST':
+        user_id = session["user_id"]
+        track_id = request.form["track_id"]
+        comment = request.form.get("comment", "").strip()
+        liked = request.form.get("liked")
+        similar_tracks = request.form.get("similar_tracks")
+
+        cursor = current_app.db.cursor(dictionary=True)
+
+        if comment != "":
+            # insert comment from user
+            today = date.today().strftime('%Y-%m-%d')
+            insert_comment_query = """
+                INSERT INTO Comments (user_id, track_id, content, created_at)
+                VALUES (%s, %s, %s, %s)
+            """
+            cursor.execute(insert_comment_query, (user_id, track_id, comment, today))
+            current_app.db.commit()
+        if liked:
+            # update tracklikes (if the user hasn't liked yet, add it. but if they have liked it, then remove the like)
+            check_like_query = """
+                SELECT 1
+                FROM TrackLikes
+                WHERE user_id = %s AND track_id = %s
+            """
+            cursor.execute(check_like_query, (user_id, track_id))
+            already_liked = cursor.fetchone() is not None
+
+            if already_liked:
+                # unlike
+                unlike_query = """
+                    DELETE FROM TrackLikes
+                    WHERE user_id = %s AND track_id = %s
+                """
+                cursor.execute(unlike_query, (user_id, track_id))
+            else:
+                # add like
+                today = date.today().strftime('%Y-%m-%d')
+                like_query = """
+                    INSERT INTO TrackLikes (user_id, track_id, liked_at)
+                    VALUES (%s, %s, %s)
+                """
+                cursor.execute(like_query, (user_id, track_id, today))
+            
+            current_app.db.commit()
+        if similar_tracks:
+            # find 10 similar tracks
+            top_10 = get_similar_tracks(track_id)
+        
     page_data = track_page_data(track_id)
 
     return render_template('track.html',
                            track=page_data["track_info"],
-                           comments=page_data["comments"])
+                           comments=page_data["comments"],
+                           similar_tracks=top_10)
 
 ########################################################
 # TODO: Implement helper functions for complex queries #
@@ -604,8 +667,8 @@ def track_page_data(track_id: int):
     :param track_id: the id of the track for which to make a page
     :type track_id: int
 
-    :returns data: dict[title, release_date, duration (secs), explicit, key_signature, popularity, \
-        comments: List[dict[username, content, created_at]]]
+    :returns data: dict[track_info: dict[title, release_date, duration (secs), explicit, key_signature, popularity, \
+        liked], comments: List[dict[username, content, created_at]]]
     '''
 
     cursor = current_app.db.cursor(dictionary=True)
@@ -613,14 +676,20 @@ def track_page_data(track_id: int):
     # Get base track info
     track_query = """
         SELECT
-            title,
-            release_date,
-            duration_ms,
-            explicit,
-            key_signature,
-            popularity
-        FROM Tracks
-        WHERE track_id = %s;
+            t.title,
+            t.release_date,
+            t.duration_ms,
+            t.explicit,
+            t.key_signature,
+            t.popularity,
+            EXISTS (
+                SELECT 1
+                FROM TrackLikes tl
+                WHERE tl.track_id = t.track_id
+                AND tl.user_id = %s
+            ) AS liked
+        FROM Tracks t
+        WHERE t.track_id = %s;
     """
     cursor.execute(track_query, (track_id,))
     track = cursor.fetchone()
@@ -841,7 +910,11 @@ def cos_sim(x1: np.array, x2: np.array) -> float:
     Computes the cosine similarity of x1 and x2. 0 = no similarity, 1 = same norm. 
     It will always fall between 0 and 1 here because the features in Tracks are all non-negative.
     '''
-    return np.dot(x1, x2) / (norm(x1) * norm(x2))
+    denom = norm(x1) * norm(x2)
+    if denom == 0:  # check for div by zero errors
+        return 0
+    
+    return np.dot(x1, x2) / denom
 
 def get_compatibility(friend_id: int) -> float:
     '''
@@ -900,3 +973,87 @@ def find_soulmate():
             best_friend = friend
 
     return best_friend if best_friend else {}
+
+FEATURE_COLUMNS = [
+    "danceability",
+    "energy",
+    "valence",
+    "tempo",
+    "acousticness",
+    "instrumentalness",
+    "liveness",
+    "speechiness"
+]
+
+def get_track_vector(cursor, track_id):
+    cols = ", ".join(FEATURE_COLUMNS)
+    cursor.execute(f"""
+        SELECT {cols}
+        FROM Tracks
+        WHERE track_id = %s
+    """, (track_id,))
+
+    row = cursor.fetchone()
+    return list(row.values()) if row else None
+
+
+def get_random_sample(cursor, sample_size):
+    cols = ", ".join(["track_id", "title"] + FEATURE_COLUMNS)
+
+    cursor.execute(f"""
+        SELECT {cols}
+        FROM Tracks
+        ORDER BY RAND()
+        LIMIT %s
+    """, (sample_size,))
+
+    return cursor.fetchall()
+
+
+def get_similar_tracks(track_id, sample_size=2000, top_k=50, return_n=10):
+    '''
+    Non-deterministically finds `return_n` (Default 10) songs that are similar to `track_id` using cosine similarity \
+    between vectors of the musical features of tracks. Samples 2000 songs, finds the top `top_k` that this track is \
+    similar to, then returns a random 10 songs from these 50 (default for `top_k`).
+    
+    :param track_id: the id of the track for which to find similar songs
+    :param sample_size: the size of the random sample from our database to test similarity against
+    :param top_k: the size of the sample of songs that are similar to track_id from which to sample the final 10
+    :param return_n: the final amount of similar songs to return
+
+    :returns results: the top `return_n` similar songs to this track. List[dict[track_id: int, title: str]]
+    '''
+
+    cursor = current_app.db.cursor(dictionary=True)
+
+    target_vector = get_track_vector(cursor, track_id)
+
+    if not target_vector:
+        cursor.close()
+        raise ValueError(f"Track {track_id} not found.")
+
+    # random sample of tracks to compare against
+    sample = get_random_sample(cursor, sample_size)
+
+    similarities = []
+
+    for row in sample:
+        sid = row['track_id']
+        stitle = row['title']
+
+        # skip self
+        if sid == track_id:
+            continue
+
+        vector = row[2:]
+        sim = cos_sim(target_vector, vector)
+        similarities.append((sid, stitle, sim))
+
+    # sort by similarity and get the top_k songs then randomly draw return_n
+    similarities.sort(key=lambda x: x[2], reverse=True)
+    top_candidates = similarities[:top_k]
+    final_selection = random.sample(top_candidates, min(return_n, len(top_candidates)))
+
+    cursor.close()
+
+    return [{"track_id": track_id, "title": title} for track_id, title, _ in final_selection]
