@@ -109,7 +109,7 @@ def home():
             - recommend_friend: recommend a friend of a friend based on similarity
                 - Requires `friend_id` attr. The friend of whom to find a friend
 
-    For full information on whateach of the above possible desired queries sends to the frontend, read each query's
+    For full information on what each of the above possible desired queries sends to the frontend, read each query's
     function's docstring for clear return value descriptions with field names and data types.
 
     Information returned to frontend under the accessible variable name `query_results`.
@@ -143,7 +143,7 @@ def home():
             case "genres":
                 query_results = top_3_genres()
             case "discovery":
-                pass
+                query_results = create_discovery_playlist()
             case "soulmate":
                 query_results = find_soulmate()
             case "compatibility":
@@ -151,7 +151,7 @@ def home():
                 friend = request.form['friend_id']
                 query_results = get_compatibility(friend)
             case "recommend_friend":
-                pass
+                query_results = recommend_friend()
             case "dashboard":
                 pass
             case "obscurity":
@@ -974,6 +974,79 @@ def find_soulmate():
 
     return best_friend if best_friend else {}
 
+def recommend_friend():
+    '''
+    Recommend a friend of a friend that the user is not currently friends with. Looks through every friend of every \
+    friend the user currently has (and goes no deeper. Walk = length 2), and finds the user with the highest \
+    compatibility to the user. This is deterministic. The answer won't change unless the user befriends the first \
+    result and asks for another recommendation.
+
+    :returns result: {friend_id: int, username: str}
+    '''
+
+    cursor = current_app.db.cursor(dictionary=True)
+    user_id = session["user_id"]
+    
+    # current friends
+    cursor.execute("""
+        SELECT 
+            CASE 
+                WHEN user_id = %s THEN friend_id
+                ELSE user_id
+            END AS friend_id
+        FROM Friendships
+        WHERE user_id = %s OR friend_id = %s
+    """, (user_id, user_id, user_id))
+
+    direct_friends = {row["friend_id"] for row in cursor.fetchall()}
+
+    if not direct_friends:
+        return None  # no friends so not recommendations
+
+    direct_friends.add(user_id)  # prevent self-recommendation
+
+    # find friends of friends
+    placeholder = ",".join(["%s"] * len(direct_friends))
+
+    query = f"""
+        SELECT DISTINCT
+            CASE
+                WHEN user_id IN ({placeholder}) THEN friend_id
+                ELSE user_id
+            END AS foaf_id
+        FROM Friendships
+        WHERE user_id IN ({placeholder}) OR friend_id IN ({placeholder})
+    """
+
+    cursor.execute(query, tuple(direct_friends) * 3)
+    candidates = {row["foaf_id"] for row in cursor.fetchall()}
+
+    # remove direct friends + self
+    candidates = candidates - direct_friends
+
+    if not candidates:
+        return None
+
+    best_id = None
+    best_score = -1
+
+    for candidate_id in candidates:
+        score = get_compatibility(candidate_id)
+        if score > best_score:
+            best_score = score
+            best_id = candidate_id
+
+    if best_id is None:
+        return None
+
+    cursor.execute("""
+        SELECT user_id AS friend_id, username
+        FROM Users
+        WHERE user_id = %s
+    """, (best_id,))
+
+    return cursor.fetchone()
+
 FEATURE_COLUMNS = [
     "danceability",
     "energy",
@@ -1057,3 +1130,74 @@ def get_similar_tracks(track_id, sample_size=2000, top_k=50, return_n=10):
     cursor.close()
 
     return [{"track_id": track_id, "title": title} for track_id, title, _ in final_selection]
+
+def create_discovery_playlist():
+    '''
+    Creates a collection of 20 songs that are from genres that the user has not liked before.
+    Non-deterministic: randomizes order of the dataset, the first 20 songs with artists whose genres are not \
+    among the user's liked genres are returned. The artists of each track are returned as a string. No metadata is provided.
+
+    :returns results: List[dict[track_id: int, title: str, artists: str]]
+    AKA [
+        {
+            track_id: int,
+            title: str,
+            artists: str
+        }
+    ]
+    '''
+
+    user_id = session["user_id"]
+    cursor = current_app.db.cursor(dictionary=True)
+
+    # genres the user has liked
+    cursor.execute(
+        '''
+        SELECT DISTINCT ag.genre_id
+        FROM TrackLikes tl
+        JOIN TrackArtists ta ON tl.track_id = ta.track_id
+        JOIN ArtistGenres ag ON ta.artist_id = ag.artist_id
+        WHERE tl.user_id = %s
+        ''',
+        (user_id,)
+    )
+
+    excluded_genres = [row["genre_id"] for row in cursor.fetchall()]
+
+    # if user hasn't liked anything
+    if not excluded_genres:
+        genre_filter = ""
+        params = []
+    else:
+        placeholders = ", ".join(["%s"] * len(excluded_genres))
+        genre_filter = f"WHERE ag.genre_id NOT IN ({placeholders})"
+        params = excluded_genres
+
+    # look for 20 songs with optimized randomization
+    query = f'''
+        SELECT
+            t.track_id,
+            t.title,
+            GROUP_CONCAT(DISTINCT a.name SEPARATOR ', ') AS artists
+        FROM Tracks t
+        JOIN TrackArtists ta ON t.track_id = ta.track_id
+        JOIN Artists a ON ta.artist_id = a.artist_id
+        JOIN ArtistGenres ag ON a.artist_id = ag.artist_id
+        {genre_filter}
+          AND t.track_id >= (
+            SELECT FLOOR(
+                (SELECT MIN(track_id) FROM Tracks) +
+                RAND() * (
+                    (SELECT MAX(track_id) FROM Tracks) -
+                    (SELECT MIN(track_id) FROM Tracks)
+                )
+            )
+        )
+        GROUP BY t.track_id
+        LIMIT 20;
+    '''
+
+    cursor.execute(query, params)
+    results = cursor.fetchall()
+
+    return results
