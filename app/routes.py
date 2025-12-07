@@ -149,11 +149,11 @@ def home():
             case "compatibility":
                 # expects the id of the friend to calculate compatibility with to be passed in POST
                 friend = request.form['friend_id']
-                query_results = get_compatibility(friend)
+                query_results = round(get_compatibility(friend), 1)  # round to 1 decimal place
             case "recommend_friend":
                 query_results = recommend_friend()
             case "dashboard":
-                pass
+                query_results = create_dashboard()
             case "obscurity":
                 query_results = calculate_obscurity()
             case "music_age":
@@ -851,6 +851,36 @@ def calculate_music_age():
 
     return int(round(row["avg_age"]))
 
+FEATURE_RANGES = {
+    "mode": (0,1),
+    "danceability": (0, 1),
+    "energy": (0, 1),
+    "loudness": (-60, 5.4),
+    "speechiness": (0, 1),
+    "acousticness": (0, 1),
+    "instrumentalness": (0, 1),
+    "liveness": (0, 1),
+    "valence": (0, 1),
+    "tempo": (0, 246)
+}
+
+def normalize_feature(value, min_val, max_val):
+    '''Required for features not on 0-1 scale for comparability.'''
+    return (value - min_val) / (max_val - min_val)
+
+FEATURE_COLUMNS = [
+    "mode",
+    "danceability",
+    "energy",
+    "valence",
+    "tempo",
+    "acousticness",
+    "instrumentalness",
+    "liveness",
+    "speechiness",
+    "loudness"
+]
+
 def get_taste_profile(user_id: int) -> np.array:
     '''
     Returns the user's "taste profile", computed as the average of the following
@@ -903,7 +933,13 @@ def get_taste_profile(user_id: int) -> np.array:
         row["tempo"]
     ], dtype=float)
 
-    return taste_vector
+    normalized = []
+    # normalize features for comparability
+    for feature, value in zip(FEATURE_COLUMNS, taste_vector):
+        min_v, max_v = FEATURE_RANGES[feature]
+        normalized.append(normalize_feature(value, min_v, max_v))
+
+    return normalized
 
 def cos_sim(x1: np.array, x2: np.array) -> float:
     '''
@@ -1047,17 +1083,6 @@ def recommend_friend():
 
     return cursor.fetchone()
 
-FEATURE_COLUMNS = [
-    "danceability",
-    "energy",
-    "valence",
-    "tempo",
-    "acousticness",
-    "instrumentalness",
-    "liveness",
-    "speechiness"
-]
-
 def get_track_vector(cursor, track_id):
     cols = ", ".join(FEATURE_COLUMNS)
     cursor.execute(f"""
@@ -1067,7 +1092,17 @@ def get_track_vector(cursor, track_id):
     """, (track_id,))
 
     row = cursor.fetchone()
-    return list(row.values()) if row else None
+
+    if row:
+        normalized = []
+        # normalize features for comparability
+        for feature, value in zip(FEATURE_COLUMNS, row):
+            min_v, max_v = FEATURE_RANGES[feature]
+            normalized.append(normalize_feature(value, min_v, max_v))
+    else:
+        return None
+
+    return normalized
 
 
 def get_random_sample(cursor, sample_size):
@@ -1119,7 +1154,14 @@ def get_similar_tracks(track_id, sample_size=2000, top_k=50, return_n=10):
             continue
 
         vector = row[2:]
-        sim = cos_sim(target_vector, vector)
+
+        normalized = []
+        # normalize features for comparability
+        for feature, value in zip(FEATURE_COLUMNS, row):
+            min_v, max_v = FEATURE_RANGES[feature]
+            normalized.append(normalize_feature(value, min_v, max_v))
+
+        sim = cos_sim(target_vector, normalized)
         similarities.append((sid, stitle, sim))
 
     # sort by similarity and get the top_k songs then randomly draw return_n
@@ -1201,3 +1243,19 @@ def create_discovery_playlist():
     results = cursor.fetchall()
 
     return results
+
+def create_dashboard():
+    '''
+    Generates a radar/web plot of the musical attributes the user most listens to.
+    This web plot has 8 variables which are the features in the FEATURE_COLUMNS variable. (i.e. danceability, valence)
+    If the user's theme in the Preferences table is 'light', axes are black and bg is white. If 'dark', \
+        use a black bg and white axes. The color of the web itself is #1DB954.
+
+    Stores the figure as a png with dpi 200 in the static/ folder.
+    Returns name of the file in the static folder.
+    '''
+
+    user_id = session["user_id"]
+    cursor = current_app.db.cursor(dictionary=True)
+
+    pass
