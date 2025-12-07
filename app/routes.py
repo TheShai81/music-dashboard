@@ -5,6 +5,7 @@ from datetime import date
 import numpy as np
 from numpy.linalg import norm
 import random
+import matplotlib.pyplot as plt
 
 bp = Blueprint('main', __name__, template_folder="templates")
 
@@ -135,8 +136,10 @@ def home():
     cursor.close()
 
     query_results = []
+    query_type = None
     if request.method == 'POST':
         desired_query = request.form['desired_query']
+        query_type = desired_query
         match desired_query:
             case "artists":
                 query_results = top_3_artists()
@@ -170,6 +173,7 @@ def home():
     return render_template('home.html',
                            liked_songs=liked_songs,
                            friends=friends,
+                           query_type=query_type,
                            query_results=query_results)
 
 
@@ -416,7 +420,7 @@ def track_page(track_id):
                            similar_tracks=top_10)
 
 ########################################################
-# TODO: Implement helper functions for complex queries #
+#        Helper functions for complex queries          #
 ########################################################
 
 def search_users(keyword: str):
@@ -1104,7 +1108,6 @@ def get_track_vector(cursor, track_id):
 
     return normalized
 
-
 def get_random_sample(cursor, sample_size):
     cols = ", ".join(["track_id", "title"] + FEATURE_COLUMNS)
 
@@ -1116,7 +1119,6 @@ def get_random_sample(cursor, sample_size):
     """, (sample_size,))
 
     return cursor.fetchall()
-
 
 def get_similar_tracks(track_id, sample_size=2000, top_k=50, return_n=10):
     '''
@@ -1249,13 +1251,71 @@ def create_dashboard():
     Generates a radar/web plot of the musical attributes the user most listens to.
     This web plot has 8 variables which are the features in the FEATURE_COLUMNS variable. (i.e. danceability, valence)
     If the user's theme in the Preferences table is 'light', axes are black and bg is white. If 'dark', \
-        use a black bg and white axes. The color of the web itself is #1DB954.
+        use a black bg and white axes. The color of the web itself is #1DB954 (spotify green).
 
-    Stores the figure as a png with dpi 200 in the static/ folder.
+    Stores the figure as a png in the static/ folder.
     Returns name of the file in the static folder.
     '''
 
     user_id = session["user_id"]
     cursor = current_app.db.cursor(dictionary=True)
 
-    pass
+    # theme preference
+    cursor.execute("""
+        SELECT theme
+        FROM Preferences
+        WHERE user_id = %s
+    """, (user_id,))
+    result = cursor.fetchone()
+    theme = result["theme"] if result and result["theme"] else "dark"
+
+    # average liked track features
+    feature_columns_str = ", ".join([f"AVG(t.{col}) AS {col}" for col in FEATURE_COLUMNS])
+
+    query = f"""
+        SELECT {feature_columns_str}
+        FROM TrackLikes tl
+        JOIN Tracks t ON tl.track_id = t.track_id
+        WHERE tl.user_id = %s
+    """
+
+    cursor.execute(query, (user_id,))
+    averages = cursor.fetchone()
+    if not averages:
+        return None
+
+    values = [averages[col] for col in FEATURE_COLUMNS]
+
+    num_vars = len(FEATURE_COLUMNS)
+    angles = np.linspace(0, 2 * np.pi, num_vars, endpoint=False).tolist()
+    values += values[:1]
+    angles += angles[:1]
+    labels = FEATURE_COLUMNS + [FEATURE_COLUMNS[0]]
+
+    if theme == "dark":
+        bg_color   = "#191414"
+        axis_color = "white"
+    else:
+        bg_color   = "white"
+        axis_color = "#191414"
+
+    fig, ax = plt.subplots(figsize=(6, 6), subplot_kw=dict(polar=True))
+    fig.patch.set_facecolor(bg_color)
+    ax.set_facecolor(bg_color)
+    ax.spines['polar'].set_color(axis_color)
+    ax.tick_params(colors=axis_color)
+    ax.xaxis.label.set_color(axis_color)
+    ax.yaxis.label.set_color(axis_color)
+    plt.xticks(angles[:-1], FEATURE_COLUMNS, color=axis_color)
+    ax.plot(angles, values, color="#1DB954", linewidth=2)
+    ax.fill(angles, values, color="#1DB954", alpha=0.25)
+    ax.set_ylim(0, 1)
+
+    filename = f"dashboard_{user_id}.png"
+    filepath = current_app.root_path + "/static/" + filename
+
+    plt.tight_layout()
+    plt.savefig(filepath, dpi=200, transparent=False)
+    plt.close()
+
+    return filename
