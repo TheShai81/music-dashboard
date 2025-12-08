@@ -136,46 +136,41 @@ def home():
     friends = cursor.fetchall()
     cursor.close()
 
-    query_results = []
+    dashboard_results = []
+    dashboard_description = "TODO"
     query_type = None
     if request.method == 'POST':
         desired_query = request.form['desired_query']
-        query_type = desired_query
+        query_type = dashboard_results
         match desired_query:
             case "artists":
-                query_results = top_3_artists()
+                dashboard_results = top_3_artists()
             case "genres":
-                query_results = top_3_genres()
+                dashboard_results = top_3_genres()
             case "discovery":
-                query_results = create_discovery_playlist()
+                dashboard_results = create_discovery_playlist()
             case "soulmate":
-                query_results = find_soulmate()
+                dashboard_results = find_soulmate()
             case "compatibility":
                 # expects the id of the friend to calculate compatibility with to be passed in POST
                 friend = request.form['friend_id']
-                query_results = round(get_compatibility(friend), 1)  # round to 1 decimal place
+                dashboard_results = round(get_compatibility(friend), 1)  # round to 1 decimal place
             case "recommend_friend":
-                query_results = recommend_friend()
+                dashboard_results = recommend_friend()
             case "dashboard":
-                query_results = create_dashboard()
+                dashboard_results = create_dashboard()
             case "obscurity":
-                query_results = calculate_obscurity()
+                dashboard_results = calculate_obscurity()
             case "music_age":
-                query_results = calculate_music_age()
+                dashboard_results = calculate_music_age()
             case _:
                 abort(404)
-
-    dashboard_data = {
-        'liked_songs': [], 
-        'top_genres': [],
-        'friend_recommendations': []
-    }
 
     return render_template('home.html',
                            liked_songs=liked_songs,
                            friends=friends,
                            query_type=query_type,
-                           query_results=query_results)
+                           dashboard_results=dashboard_results)
 
 
 @bp.route('/search', methods=['GET', 'POST'])
