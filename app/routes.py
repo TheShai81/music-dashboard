@@ -304,16 +304,48 @@ def user_page(user_id):
             }
         ]
     '''
-    # TODO: implement function to etch user info, liked tracks, and friends
+    cursor = current_app.db.cursor(dictionary=True)
+    self_id = session['user_id']
+
+    user_id1, user_id2 = sorted([self_id, user_id])
+
+    # toggle friendship
+    if request.method == 'POST':
+        add_friend = request.form.get('add_friend', 'false').lower() == 'true'
+        
+        # if friendship already exists
+        cursor.execute(
+            "SELECT * FROM Friendships WHERE user_id1=%s AND user_id2=%s",
+            (user_id1, user_id2)
+        )
+        exists = cursor.fetchone()
+
+        if add_friend and not exists:
+            cursor.execute(
+                "INSERT INTO Friendships (user_id1, user_id2, date_befriended) VALUES (%s, %s, CURDATE())",
+                (user_id1, user_id2)
+            )
+        elif not add_friend and exists:
+            # delete
+            cursor.execute(
+                "DELETE FROM Friendships WHERE user_id1=%s AND user_id2=%s",
+                (user_id1, user_id2)
+            )
+        current_app.db.commit()
+
+    cursor.execute(
+        "SELECT * FROM Friendships WHERE user_id1=%s AND user_id2=%s",
+        (user_id1, user_id2)
+    )
+    is_friends = cursor.fetchone() is not None
+
     page_data = user_page_data(user_id)
-    user_info = {}
-    liked_tracks = []
-    friends = []
 
     return render_template('user.html',
                            user=page_data["user_info"],
                            liked_tracks=page_data["liked_tracks"],
-                           friends=page_data["friends"])
+                           friends=page_data["friends"],
+                           is_friends=is_friends)
 
 
 @bp.route('/track/<track_id>', methods=['GET', 'POST'])
@@ -408,13 +440,21 @@ def track_page(track_id):
         if similar_tracks:
             # find 10 similar tracks
             top_10 = get_similar_tracks(track_id)
+
+    # see if user has liked the track
+    cursor.execute(
+        "SELECT * FROM TrackLikes WHERE user_id = %s AND track_id = %s",
+        (user_id, track_id)
+    )
+    has_liked = cursor.fetchone() is not None
         
     page_data = track_page_data(track_id)
 
     return render_template('track.html',
                            track=page_data["track_info"],
                            comments=page_data["comments"],
-                           similar_tracks=top_10)
+                           similar_tracks=top_10,
+                           has_liked=has_liked)
 
 ########################################################
 #        Helper functions for complex queries          #
@@ -734,7 +774,7 @@ def top_3_artists():
     :returns results: [
         {
             artist_id: int,
-            name: str,
+            artist_name: str,
             like_count: int
         }
     ] \
@@ -748,7 +788,7 @@ def top_3_artists():
     query = """
         SELECT 
             a.artist_id,
-            a.name,
+            a.name AS artist_name,
             COUNT(tl.track_id) AS like_count
         FROM TrackLikes tl
         JOIN TrackArtists ta ON tl.track_id = ta.track_id
@@ -768,11 +808,11 @@ def top_3_genres():
     '''
     Finds the top 3 most liked genres of the user.
 
-    :returns results: List[dict[genre_name: str, liked_count: int]] or \
+    :returns results: List[dict[genre_name: str, like_count: int]] or \
     [
         {
             genre_name: str,
-            liked_count: int
+            like_count: int
         }
     ]
     '''
@@ -783,7 +823,7 @@ def top_3_genres():
     query = """
     SELECT 
         g.genre_name,
-        COUNT(tl.track_id) AS liked_count
+        COUNT(tl.track_id) AS like_count
     FROM TrackLikes tl
     JOIN Tracks t ON tl.track_id = t.track_id
     JOIN ArtistGenres ag ON ag.artist_id = (
