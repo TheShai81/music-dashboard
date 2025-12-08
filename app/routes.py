@@ -835,7 +835,7 @@ def top_3_genres():
     JOIN Genres g ON ag.genre_id = g.genre_id
     WHERE tl.user_id = %s
     GROUP BY g.genre_id, g.genre_name
-    ORDER BY liked_count DESC
+    ORDER BY like_count DESC
     LIMIT 3;
     """
 
