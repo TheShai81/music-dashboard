@@ -87,7 +87,7 @@ def login():
     return render_template('login.html')
 
 
-@bp.route('/home')
+@bp.route('/home', methods=['GET', 'POST'])
 def home():
     '''
     A user's home page that shows them their own information.
@@ -279,7 +279,8 @@ def artist_page(artist_id):
                            tracks=page_data["tracks"])
 
 
-@bp.route('/user/<int:user_id>')
+# TODO implement befriending someone via post
+@bp.route('/user/<int:user_id>', methods=['GET', 'POST'])
 def user_page(user_id):
     '''
     A user page. Only expects `user_id` to render template.
