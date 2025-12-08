@@ -651,8 +651,9 @@ def user_page_data(user_id: int):
             u.user_id AS friend_id,
             u.username AS friend_name
         FROM Friendships f
-        JOIN Users u ON f.friend_id = u.user_id
-        WHERE f.user_id = %s;
+        JOIN Users u 
+            ON (u.user_id = f.user_id1 AND f.user_id2 = %s)
+            OR (u.user_id = f.user_id2 AND f.user_id1 = %s);
     """
     cursor.execute(friends_query, (user_id,))
     friends = cursor.fetchall()
