@@ -477,7 +477,7 @@ def search_tracks(track_keyword: str, artist_keyword: str):
     ms in the database to seconds in the returned variable.
     '''
 
-    cursor = current_app.db.cursour(dictionary=True)
+    cursor = current_app.db.cursor(dictionary=True)
     base_query = """
         SELECT
             t.track_id,
