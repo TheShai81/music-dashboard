@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block content %}
+<h2 class="mb-3">{{ track.title }}</h2>
+<p class="text-muted">
+    Released: {{ track.release_date }} • Duration: {{ track.duration }} sec •
+    Popularity: {{ track.popularity }} • Explicit: {{ 'Yes' if track.explicit else 'No' }}
+</p>
+
+<hr>
+
+<h4>Like & Comment</h4>
+<form method="POST" class="mb-4">
+    <div class="mb-3">
+        <label class="form-label">Leave a comment</label>
+        <textarea name="comment" class="form-control" rows="3"
+                  placeholder="What do you think about this track?"></textarea>
+    </div>
+
+    <div class="form-check mb-3">
+        <input class="form-check-input" type="checkbox" name="liked" id="likedCheck">
+        <label class="form-check-label" for="likedCheck">
+            Like this track
+        </label>
+    </div>
+
+    <button type="submit" class="btn btn-success">Submit</button>
+</form>
+
+<h4>Comments</h4>
+{% if comments %}
+<ul class="list-group">
+    {% for c in comments %}
+    <li class="list-group-item bg-dark text-light">
+        <strong>{{ c.username }}</strong>
+        <span class="text-muted small"> • {{ c.created_at }}</span>
+        <div>{{ c.content }}</div>
+    </li>
+    {% endfor %}
+</ul>
+{% else %}
+<p class="text-muted">No comments yet.</p>
+{% endif %}
+{% endblock %}

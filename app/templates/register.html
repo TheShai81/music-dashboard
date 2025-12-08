@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block content %}
+<h2 class="mb-4">Create an Account</h2>
+
+<form method="POST" class="row g-3">
+    <div class="col-md-6">
+        <label class="form-label">Username</label>
+        <input type="text" name="username" class="form-control" required>
+    </div>
+
+    <div class="col-md-6">
+        <label class="form-label">Email</label>
+        <input type="email" name="email" class="form-control" required>
+    </div>
+
+    <div class="col-md-6">
+        <label class="form-label">Password</label>
+        <input type="password" name="password" class="form-control" required>
+    </div>
+
+    <div class="col-md-3">
+        <label class="form-label">Theme</label>
+        <select name="theme" class="form-select">
+            <option value="dark" selected>Dark</option>
+            <option value="light">Light</option>
+        </select>
+    </div>
+
+    <div class="col-md-3">
+        <label class="form-label">Profile Color</label>
+        <input type="color" name="pfp_color" class="form-control form-control-color" value="#1DB954">
+    </div>
+
+    <div class="col-12">
+        <button type="submit" class="btn btn-success">Register</button>
+    </div>
+</form>
+{% endblock %}
