@@ -676,6 +676,7 @@ def track_page_data(track_id: int):
         liked], comments: List[dict[username, content, created_at]]]
     '''
 
+    user_id = session["user_id"]
     cursor = current_app.db.cursor(dictionary=True)
 
     # Get base track info
@@ -696,7 +697,7 @@ def track_page_data(track_id: int):
         FROM Tracks t
         WHERE t.track_id = %s;
     """
-    cursor.execute(track_query, (track_id,))
+    cursor.execute(track_query, (user_id, track_id,))
     track = cursor.fetchone()
 
     if not track:
