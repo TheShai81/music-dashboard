@@ -136,33 +136,33 @@ def home():
     friends = cursor.fetchall()
     cursor.close()
 
-    dashboard_results = []
+    dashboard_result = []
     dashboard_description = "TODO"
     query_type = None
     if request.method == 'POST':
         desired_query = request.form['desired_query']
-        query_type = dashboard_results
+        query_type = dashboard_result
         match desired_query:
             case "artists":
-                dashboard_results = top_3_artists()
+                dashboard_result = top_3_artists()
             case "genres":
-                dashboard_results = top_3_genres()
+                dashboard_result = top_3_genres()
             case "discovery":
-                dashboard_results = create_discovery_playlist()
+                dashboard_result = create_discovery_playlist()
             case "soulmate":
-                dashboard_results = find_soulmate()
+                dashboard_result = find_soulmate()
             case "compatibility":
                 # expects the id of the friend to calculate compatibility with to be passed in POST
                 friend = request.form['friend_id']
-                dashboard_results = round(get_compatibility(friend), 1)  # round to 1 decimal place
+                dashboard_result = round(get_compatibility(friend), 1)  # round to 1 decimal place
             case "recommend_friend":
-                dashboard_results = recommend_friend()
+                dashboard_result = recommend_friend()
             case "dashboard":
-                dashboard_results = create_dashboard()
+                dashboard_result = create_dashboard()
             case "obscurity":
-                dashboard_results = calculate_obscurity()
+                dashboard_result = calculate_obscurity()
             case "music_age":
-                dashboard_results = calculate_music_age()
+                dashboard_result = calculate_music_age()
             case _:
                 abort(404)
 
@@ -170,7 +170,7 @@ def home():
                            liked_songs=liked_songs,
                            friends=friends,
                            query_type=query_type,
-                           dashboard_results=dashboard_results)
+                           dashboard_result=dashboard_result)
 
 
 @bp.route('/search', methods=['GET', 'POST'])
