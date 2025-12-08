@@ -366,7 +366,6 @@ def track_page(track_id):
 
     if request.method == 'POST':
         user_id = session["user_id"]
-        track_id = request.form["track_id"]
         comment = request.form.get("comment", "").strip()
         liked = request.form.get("liked")
         similar_tracks = request.form.get("similar_tracks")
@@ -605,9 +604,10 @@ def user_page_data(user_id: int):
 
     # base user info
     user_query = """
-        SELECT username, pfp_color
-        FROM Users
-        WHERE user_id = %s;
+        SELECT u.username, p.pfp_color
+        FROM Users u
+        LEFT JOIN Preferences p ON u.user_id = p.user_id
+        WHERE u.user_id = %s;
     """
     cursor.execute(user_query, (user_id,))
     user = cursor.fetchone()
