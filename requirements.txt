@@ -1,6 +1,7 @@
 # Core utilities
 python-dotenv==1.0.1
 pandas==2.2.2
+matplotlib==3.10.7
 
 # Database connectors
 mysql-connector-python==9.0.0
