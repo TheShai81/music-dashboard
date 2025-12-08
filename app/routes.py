@@ -126,13 +126,13 @@ def home():
     # find liked songs
     query = "SELECT t.track_id, t.title, t.duration_ms, t.release_date FROM Tracks t JOIN TrackLikes tl ON t.track_id = tl.track_id WHERE tl.user_id = %s"
     cursor = current_app.db.cursor(dictionary=True)
-    cursor.execute(query, (user_id))
+    cursor.execute(query, (user_id,))
     liked_songs = cursor.fetchall()
     # find friends
     query = "SELECT u.user_id, u.username, f.date_befriended FROM Users u " \
             "JOIN Friendships f ON" \
             "(u.user_id = f.user_id1 AND f.user_id2 = %s) OR (u.user_id = f.user_id2 AND f.user_id1 = %s)"
-    cursor.execute(query, (user_id))
+    cursor.execute(query, (user_id, user_id))
     friends = cursor.fetchall()
     cursor.close()
 
