@@ -170,7 +170,8 @@ def home():
                            liked_songs=liked_songs,
                            friends=friends,
                            query_type=query_type,
-                           dashboard_result=dashboard_result)
+                           dashboard_result=dashboard_result,
+                           dashboard_description=dashboard_description)
 
 
 @bp.route('/search', methods=['GET', 'POST'])
