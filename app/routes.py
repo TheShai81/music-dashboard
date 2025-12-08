@@ -655,7 +655,7 @@ def user_page_data(user_id: int):
             ON (u.user_id = f.user_id1 AND f.user_id2 = %s)
             OR (u.user_id = f.user_id2 AND f.user_id1 = %s);
     """
-    cursor.execute(friends_query, (user_id,))
+    cursor.execute(friends_query, (user_id, user_id))
     friends = cursor.fetchall()
 
     cursor.close()
