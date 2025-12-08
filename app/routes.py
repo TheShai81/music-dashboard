@@ -442,6 +442,7 @@ def track_page(track_id):
             top_10 = get_similar_tracks(track_id)
 
     # see if user has liked the track
+    cursor = current_app.db.cursor(dictionary=True)
     cursor.execute(
         "SELECT * FROM TrackLikes WHERE user_id = %s AND track_id = %s",
         (user_id, track_id)
