@@ -3,7 +3,7 @@
 {% block content %}
 <h2 class="mb-3">Your Spotify Dashboard</h2>
 <p class="text-muted">
-    This page shows your liked songs, your friends, and lets you run a few dashboard queries
+    This page shows your liked songs, your friends, and lets you run various queries
     on top of our Spotify database.
 </p>
 
@@ -16,57 +16,169 @@
         <div class="form-check">
             <input class="form-check-input" type="radio" name="desired_query" id="genresQuery" value="genres" checked>
             <label class="form-check-label" for="genresQuery">
-                Show my top 3 most-liked <strong>genres</strong>
+                Top 3 most-liked <strong>genres</strong>
             </label>
         </div>
+
         <div class="form-check">
             <input class="form-check-input" type="radio" name="desired_query" id="artistsQuery" value="artists">
             <label class="form-check-label" for="artistsQuery">
-                Show my top 3 most-liked <strong>artists</strong>
+                Top 3 most-liked <strong>artists</strong>
             </label>
         </div>
-        <!-- Later you could add more options here (soulmate, discovery, etc.) -->
+
+        <div class="form-check">
+            <input class="form-check-input" type="radio" name="desired_query" id="discoveryQuery" value="discovery">
+            <label class="form-check-label" for="discoveryQuery">
+                Generate a <strong>discovery playlist</strong>
+            </label>
+        </div>
+
+        <div class="form-check">
+            <input class="form-check-input" type="radio" name="desired_query" id="soulmateQuery" value="soulmate">
+            <label class="form-check-label" for="soulmateQuery">
+                Find my musical <strong>soulmate</strong>
+            </label>
+        </div>
+
+        <div class="form-check">
+            <input class="form-check-input" type="radio" name="desired_query" id="compatQuery" value="compatibility">
+            <label class="form-check-label" for="compatQuery">
+                Compute <strong>compatibility</strong> with a friend
+            </label>
+        </div>
+
+        <div class="form-check">
+            <input class="form-check-input" type="radio" name="desired_query" id="recoFriendQuery" value="recommend_friend">
+            <label class="form-check-label" for="recoFriendQuery">
+                Recommend a <strong>friend of a friend</strong>
+            </label>
+        </div>
+
+        <div class="form-check">
+            <input class="form-check-input" type="radio" name="desired_query" id="dashboardQuery" value="dashboard">
+            <label class="form-check-label" for="dashboardQuery">
+                Generate my <strong>dashboard image</strong>
+            </label>
+        </div>
+
+        <div class="form-check">
+            <input class="form-check-input" type="radio" name="desired_query" id="obscurityQuery" value="obscurity">
+            <label class="form-check-label" for="obscurityQuery">
+                Measure how <strong>obscure</strong> my taste is
+            </label>
+        </div>
+
+        <div class="form-check">
+            <input class="form-check-input" type="radio" name="desired_query" id="musicAgeQuery" value="music_age">
+            <label class="form-check-label" for="musicAgeQuery">
+                Compute my <strong>music age</strong>
+            </label>
+        </div>
     </div>
-    <div class="col-12 mt-2">
+
+    <!-- Friend selector for the compatibility query -->
+    <div class="col-12 mt-3">
+        <label class="form-label" for="friendSelect">
+            If you selected "compatibility", choose a friend:
+        </label>
+        <select class="form-select" id="friendSelect" name="friend_id">
+            {% for friend in friends %}
+            <option value="{{ friend.user_id }}">{{ friend.username }}</option>
+            {% endfor %}
+        </select>
+    </div>
+
+    <div class="col-12 mt-3">
         <button type="submit" class="btn btn-success">Run query</button>
     </div>
 </form>
 
-{% if dashboard_result and dashboard_description %}
-<div class="mb-4">
-    <h5>{{ dashboard_description }}</h5>
-    <table class="table table-dark table-striped table-sm align-middle">
-        <thead>
-        <tr>
-            {% if dashboard_result[0].get('genre_name') %}
-                <th>Genre</th>
-                <th>Like count</th>
-            {% else %}
-                <th>Artist</th>
-                <th>Like count</th>
-            {% endif %}
-        </tr>
-        </thead>
-        <tbody>
-        {% for row in dashboard_result %}
-        <tr>
-            {% if row.get('genre_name') %}
-                <td>{{ row.genre_name }}</td>
-                <td>{{ row.like_count }}</td>
-            {% else %}
-                <td>{{ row.artist_name }}</td>
-                <td>{{ row.like_count }}</td>
-            {% endif %}
-        </tr>
+<!-- 2. Display query result, specialized by type -->
+{% if request.method == 'POST' %}
+<hr>
+<h4 class="mb-3">Query result</h4>
+
+{% if dashboard_result is string %}
+    <!-- "dashboard" query: dashboard_result is filename in static/ -->
+    {% if dashboard_result %}
+        <img class="img-fluid"
+             src="{{ url_for('static', filename=dashboard_result) }}"
+             alt="Listening dashboard">
+        <p class="mt-2">
+            Image file:
+            <code>{{ dashboard_result }}</code>
+        </p>
+    {% else %}
+        <p class="text-muted">We couldn't generate a dashboard (maybe no liked tracks).</p>
+    {% endif %}
+
+{% elif dashboard_result is mapping %}
+    <!-- soulmate or recommended friend (dict with friend_id, username) -->
+    {% if dashboard_result and 'friend_id' in dashboard_result and 'username' in dashboard_result %}
+        <p>
+            User:
+            <a href="{{ url_for('main.user_page', user_id=dashboard_result.friend_id) }}">
+                {{ dashboard_result.username }}
+            </a>
+        </p>
+    {% elif dashboard_result %}
+        <!-- generic dict display -->
+        <ul>
+        {% for key, value in dashboard_result.items() %}
+            <li><strong>{{ key }}:</strong> {{ value }}</li>
         {% endfor %}
-        </tbody>
-    </table>
-</div>
+        </ul>
+    {% else %}
+        <p class="text-muted">No result for this query.</p>
+    {% endif %}
+
+{% elif dashboard_result is sequence %}
+    {% if dashboard_result|length > 0 and dashboard_result[0] is mapping %}
+        <!-- generic table for list-of-dicts (artists, genres, discovery playlist, etc.) -->
+        <table class="table table-dark table-striped table-sm align-middle">
+            <thead>
+            <tr>
+                {% for key in dashboard_result[0].keys() %}
+                <th>{{ key }}</th>
+                {% endfor %}
+            </tr>
+            </thead>
+            <tbody>
+            {% for row in dashboard_result %}
+            <tr>
+                {% for key, value in row.items() %}
+                    {% if key == 'track_id' %}
+                        <!-- keep track_id hidden as plain text -->
+                        <td>{{ value }}</td>
+                    {% elif key == 'title' and 'track_id' in row %}
+                        <!-- link titles to track pages when track_id present -->
+                        <td>
+                            <a class="text-light" href="{{ url_for('main.track_page', track_id=row.track_id) }}">
+                                {{ value }}
+                            </a>
+                        </td>
+                    {% else %}
+                        <td>{{ value }}</td>
+                    {% endif %}
+                {% endfor %}
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    {% else %}
+        <p class="text-muted">No results for this query.</p>
+    {% endif %}
+
+{% else %}
+    <!-- numbers: compatibility, obscurity, music_age -->
+    <p><strong>{{ dashboard_result }}</strong></p>
+{% endif %}
 {% endif %}
 
 <hr>
 
-<!-- 2. Liked songs table -->
+<!-- 3. Liked songs table -->
 <div class="row mt-4">
     <div class="col-md-6">
         <h4>Your liked songs</h4>
@@ -98,7 +210,7 @@
         {% endif %}
     </div>
 
-    <!-- 3. Friends list -->
+    <!-- 4. Friends list -->
     <div class="col-md-6">
         <h4>Your friends</h4>
         {% if friends %}

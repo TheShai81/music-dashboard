@@ -5,6 +5,8 @@ from datetime import date
 import numpy as np
 from numpy.linalg import norm
 import random
+import matplotlib
+matplotlib.use('Agg')  # ADDED - > use non-GUI backend so it can render in Flask
 import matplotlib.pyplot as plt
 
 bp = Blueprint('main', __name__, template_folder="templates")
@@ -153,8 +155,11 @@ def home():
                 dashboard_result = find_soulmate()
             case "compatibility":
                 # expects the id of the friend to calculate compatibility with to be passed in POST
-                friend = request.form['friend_id']
-                dashboard_result = round(get_compatibility(friend), 1)  # round to 1 decimal place
+                friend = request.form.get('friend_id')
+                if friend:
+                    dashboard_result = round(get_compatibility(friend), 1)  # round to 1 decimal place
+                else:
+                    dashboard_result = "No friend selected."
             case "recommend_friend":
                 dashboard_result = recommend_friend()
             case "dashboard":
@@ -884,7 +889,7 @@ def calculate_music_age():
         SELECT AVG(YEAR(CURDATE()) - YEAR(t.release_date)) AS avg_age
         FROM TrackLikes tl
         JOIN Tracks t ON tl.track_id = t.track_id
-        WHERE tl.user_id = 1
+        WHERE tl.user_id = %s
         AND t.release_date IS NOT NULL;
     """
 
@@ -910,8 +915,15 @@ FEATURE_RANGES = {
 }
 
 def normalize_feature(value, min_val, max_val):
-    '''Required for features not on 0-1 scale for comparability.'''
-    return (value - min_val) / (max_val - min_val)
+    """Required for features not on 0-1 scale for comparability."""
+    if value is None:
+        return 0.0
+    try:
+        v = float(value)
+    except (TypeError, ValueError):
+        # edge case -> 0
+        v = 0.0
+    return (v - min_val) / (max_val - min_val)
 
 FEATURE_COLUMNS = [
     "mode",
@@ -950,7 +962,7 @@ def get_taste_profile(user_id: int) -> np.array:
             AVG(t.instrumentalness)    AS instrumentalness,
             AVG(t.liveness)            AS liveness,
             AVG(t.valence)             AS valence,
-            AVG(t.tempo)               AS tempo,
+            AVG(t.tempo)               AS tempo
         FROM TrackLikes tl
         JOIN Tracks t ON tl.track_id = t.track_id
         WHERE tl.user_id = %s;
@@ -1030,9 +1042,9 @@ def find_soulmate():
             u.username
         FROM Friendships f
         JOIN Users u ON (
-            (f.user_id_1 = %s AND f.user_id_2 = u.user_id)
+            (f.user_id1 = %s AND f.user_id2 = u.user_id)
             OR
-            (f.user_id_2 = %s AND f.user_id_1 = u.user_id)
+            (f.user_id2 = %s AND f.user_id1 = u.user_id)
         )
     """
     cursor.execute(query, (user_id, user_id))
@@ -1072,11 +1084,11 @@ def recommend_friend():
     cursor.execute("""
         SELECT 
             CASE 
-                WHEN user_id = %s THEN friend_id
-                ELSE user_id
+                WHEN user_id1 = %s THEN user_id2
+                ELSE user_id1
             END AS friend_id
         FROM Friendships
-        WHERE user_id = %s OR friend_id = %s
+        WHERE user_id1 = %s OR user_id2 = %s
     """, (user_id, user_id, user_id))
 
     direct_friends = {row["friend_id"] for row in cursor.fetchall()}
@@ -1092,11 +1104,11 @@ def recommend_friend():
     query = f"""
         SELECT DISTINCT
             CASE
-                WHEN user_id IN ({placeholder}) THEN friend_id
-                ELSE user_id
+                WHEN user_id1 IN ({placeholder}) THEN user_id2
+                ELSE user_id1
             END AS foaf_id
         FROM Friendships
-        WHERE user_id IN ({placeholder}) OR friend_id IN ({placeholder})
+        WHERE user_id1 IN ({placeholder}) OR user_id2 IN ({placeholder})
     """
 
     cursor.execute(query, tuple(direct_friends) * 3)
@@ -1196,11 +1208,10 @@ def get_similar_tracks(track_id, sample_size=2000, top_k=50, return_n=10):
         if sid == track_id:
             continue
 
-        vector = row[2:]
-
         normalized = []
-        # normalize features for comparability
-        for feature, value in zip(FEATURE_COLUMNS, row):
+        # row is a dict (because of dictionary=True), so pull values by feature name
+        for feature in FEATURE_COLUMNS:
+            value = row[feature]
             min_v, max_v = FEATURE_RANGES[feature]
             normalized.append(normalize_feature(value, min_v, max_v))
 
