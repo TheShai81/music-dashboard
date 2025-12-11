@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% block content %}
+<h2 class="mb-3">{{ track.title }}</h2>
+<p class="text-light small mb-2">
+    Released: {{ track.release_date }} • Duration: {{ track.duration }} sec •
+    Popularity: {{ track.popularity }} • Explicit: {{ 'Yes' if track.explicit else 'No' }}
+</p>
+
+<hr>
+
+<!-- Like / unlike track -->
+<h4 class="mb-3">Like this track</h4>
+
+<form method="POST" class="mb-4 d-inline">
+    <!-- if this field is present at all, the backend will toggle the like -->
+    <input type="hidden" name="liked" value="1">
+    {% if has_liked %}
+        <button type="submit" class="btn btn-outline-danger btn-sm">
+            Unlike
+        </button>
+        <span class="text-success ms-2">You like this track.</span>
+    {% else %}
+        <button type="submit" class="btn btn-outline-success btn-sm">
+            Like
+        </button>
+    {% endif %}
+</form>
+
+<!-- Generate 10 similar songs -->
+<form method="POST" class="mb-4 d-inline ms-3">
+    <!-- just needs to exist; backend only checks truthiness -->
+    <input type="hidden" name="similar_tracks" value="1">
+    <button type="submit" class="btn btn-secondary btn-sm">
+        Generate 10 similar songs
+    </button>
+</form>
+
+<hr>
+
+<!-- Comment form -->
+<h4>Leave a comment</h4>
+<form method="POST" class="mb-4">
+    <div class="mb-3">
+        <textarea name="comment" class="form-control" rows="3"
+                  placeholder="What do you think about this track?"></textarea>
+    </div>
+    <button type="submit" class="btn btn-success">Submit comment</button>
+</form>
+
+<!-- Similar tracks, if requested -->
+{% if similar_tracks %}
+<h4>Similar tracks</h4>
+<ul class="list-group mb-4">
+    {% for s in similar_tracks %}
+    <li class="list-group-item bg-dark text-light">
+        <a class="text-light" href="{{ url_for('main.track_page', track_id=s.track_id) }}">
+            {{ s.title }}
+        </a>
+    </li>
+    {% endfor %}
+</ul>
+{% endif %}
+
+<!-- Comments -->
+<h4>Comments</h4>
+{% if comments %}
+<ul class="list-group">
+    {% for c in comments %}
+    <li class="list-group-item bg-dark text-light">
+        <strong>{{ c.username }}</strong>
+        <span class="text-muted small"> • {{ c.created_at }}</span>
+        <div>{{ c.content }}</div>
+    </li>
+    {% endfor %}
+</ul>
+{% else %}
+<p class="text-muted">No comments yet.</p>
+{% endif %}
+{% endblock %}
