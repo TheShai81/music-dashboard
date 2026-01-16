@@ -1,15 +1,35 @@
-# spotify-dashboard
-Git repo for Databases project
-
-# Spotify Dashboard (Non-Streaming)
+# Music Insights Dashboard (Non-Streaming)
 
 Relational database + mini-app built on top of Kaggle’s Spotify dataset.
-Users can create accounts, make friends, build playlists, and explore tracks,
-artists, and genres without actually streaming audio.
+Users can create accounts, make friends, build playlists, explore tracks,
+artists, and genres, find tracks/artists/genres similar to their tastes,
+and view friend stats by just adding friends and songs to their profile.
+
+## Skills Utilized
+
+### Languages
+- Python
+- SQL
+- JavaScript (UI)
+- HTML (Layout)
+- CSS (Layout)
+
+### Tools/Frameworks
+- Flask
+- MySQL
+- Git & GitHub
+- NumPy
+
+### Other Skills
+- Dashboard development and analytics UI
+- Environment configuration
+- Database schema design
+- ETL with existing and generated datasets
+- Web backend frameworks
 
 ## Quick Start
 
-1. **Clone repository**: `git clone https://github.com/egrantcharov/spotify-dashboard.git`
+1. **Clone repository**
 2. **Set up Python environment**:
    ```bash
    python3 -m venv venv
@@ -51,7 +71,7 @@ https://www.kaggle.com/datasets/lehaknarnauli/spotify-datasets
 
 - **Database:** MySQL
 - **Language:** Python 3.x for generating and loading data
-- **Future app:** Flask or Django (TBD)
+- **Future app:** Flask
 - **Version control:** Git + GitHub
 
 ## 3. Repository Structure
