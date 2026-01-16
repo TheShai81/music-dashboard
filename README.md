@@ -4,15 +4,15 @@ Relational database + mini-app built on top of Kaggle’s Spotify dataset.
 Users can create accounts, make friends, build playlists, explore tracks,
 artists, and genres, find tracks/artists/genres similar to their tastes,
 and view friend stats by just adding friends and songs to their profile.
+This app does not support streaming.
 
 ## Skills Utilized
 
 ### Languages
 - Python
 - SQL
-- JavaScript (UI)
-- HTML (Layout)
-- CSS (Layout)
+- HTML (UI/Layout)
+- Jinja
 
 ### Tools/Frameworks
 - Flask
